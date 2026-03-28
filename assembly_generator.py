@@ -397,6 +397,8 @@ class AssemblyGenerator:
         return "\n".join(text)
 
 
+parse_tokens = _parse_tokens
+
 # Alias pedido no enunciado
 gerarAssembly = AssemblyGenerator
 

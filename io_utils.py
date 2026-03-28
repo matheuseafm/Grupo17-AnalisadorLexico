@@ -18,3 +18,23 @@ def escrever_arquivo(nome_arquivo: str, conteudo: str) -> None:
     caminho = Path(nome_arquivo)
     caminho.write_text(conteudo, encoding="utf-8")
 
+
+def exibir_resultados(resultados: list[float], expressoes: list[str]) -> None:
+    """Exibe os resultados das expressoes em formato legivel."""
+    print("=" * 50)
+    print("RESULTADOS DA EXECUCAO")
+    print("=" * 50)
+    for i, (resultado, expr) in enumerate(zip(resultados, expressoes), start=1):
+        if resultado == int(resultado):
+            valor_fmt = f"{int(resultado)}"
+        else:
+            valor_fmt = f"{resultado:.1f}"
+        print(f"  Linha {i}: {expr.strip()}")
+        print(f"         = {valor_fmt}")
+    print("=" * 50)
+    print(f"  Total de expressoes avaliadas: {len(resultados)}")
+    print("=" * 50)
+
+
+exibirResultados = exibir_resultados
+

@@ -5,7 +5,8 @@ import sys
 from pathlib import Path
 
 from assembly_generator import AssemblyGenerator
-from io_utils import escrever_arquivo, ler_arquivo
+from executor import ExpressionExecutor
+from io_utils import escrever_arquivo, exibir_resultados, ler_arquivo
 from lexer_fsm import LexerError, parse_expressao
 
 
@@ -17,6 +18,7 @@ def main(argv: list[str]) -> int:
     arquivo_entrada = argv[1]
     arquivo_saida = argv[2] if len(argv) > 2 else f"{Path(arquivo_entrada).stem}.s"
 
+    # 1. lerArquivo
     try:
         linhas = ler_arquivo(arquivo_entrada)
     except OSError as exc:
@@ -24,17 +26,30 @@ def main(argv: list[str]) -> int:
         return 1
 
     gerador = AssemblyGenerator()
+    executor = ExpressionExecutor()
+    expressoes_avaliadas: list[str] = []
 
     for numero_linha, linha in enumerate(linhas, start=1):
         if not linha.strip():
             continue
         try:
+            # 2. parseExpressao
             tokens = parse_expressao(linha)
+
+            # 3. executarExpressao
+            executor.executar_expressao(tokens)
+            expressoes_avaliadas.append(linha)
+
+            # gerarAssembly (acumula instruções)
             gerador.adicionar_expressao(tokens, numero_linha)
-        except (LexerError, ValueError) as exc:
+        except (LexerError, ValueError, RuntimeError) as exc:
             print(f"Erro na linha {numero_linha}: {exc}")
             return 1
 
+    # 4. exibirResultados
+    exibir_resultados(executor.resultados, expressoes_avaliadas)
+
+    # 5. Gerar e salvar Assembly
     assembly = gerador.gerar_programa()
     escrever_arquivo(arquivo_saida, assembly)
     print(f"Assembly gerado em: {arquivo_saida}")
@@ -43,4 +58,3 @@ def main(argv: list[str]) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv))
-

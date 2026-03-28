@@ -47,12 +47,14 @@ Projeto da **Fase 1** da disciplina. O programa lê expressões em **notação p
 ```
 Grupo17-AnalisadorLexico/
 ├── main.py                  # Ponto de entrada do programa
-├── io_utils.py              # Leitura e escrita de arquivos
+├── io_utils.py              # Leitura/escrita de arquivos + exibirResultados
 ├── tokens.py                # Definição dos tipos de token
 ├── lexer_fsm.py             # Analisador léxico (AFD com funções de estado)
+├── executor.py              # Executor de expressões RPN (executarExpressao)
 ├── assembly_generator.py    # Parser estrutural mínimo + gerador Assembly ARMv7
 ├── tests/
 │   ├── test_lexer.py        # Testes unitários do lexer
+│   ├── test_executor.py     # Testes unitários do executor
 │   └── test_codegen.py      # Testes unitários do gerador de código
 ├── teste1.txt               # Arquivo de teste 1 (entrada)
 ├── teste2.txt               # Arquivo de teste 2 (entrada)
@@ -161,27 +163,30 @@ O programa em Python **não executa** os cálculos da linguagem-alvo. Ele apenas
 
 ## Visão Geral da Arquitetura
 
-O sistema é organizado em um pipeline de três estágios sequenciais:
+O sistema é organizado em um pipeline de quatro estágios sequenciais, coordenados por `main.py`:
 
 ```
  Arquivo .txt ──▶ Leitura (io_utils) ──▶ Análise Léxica (lexer_fsm)
                                               │
                                          Lista de Tokens
-                                              │
-                                              ▼
-                                   Parsing + Geração (assembly_generator)
-                                              │
-                                         Código Assembly
-                                              │
-                                              ▼
-                                       Arquivo .s (saída)
+                                         ┌────┴────┐
+                                         │         │
+                                         ▼         ▼
+                              Execução Python   Geração Assembly
+                               (executor)     (assembly_generator)
+                                  │               │
+                                  ▼               ▼
+                           exibirResultados   Arquivo .s (saída)
+                            (io_utils)
 ```
 
-O fluxo completo, orquestrado por `main.py`, é:
+O fluxo completo, orquestrado por `main.py`, segue as quatro funções solicitadas no enunciado:
 
-1. **Leitura** — `io_utils.ler_arquivo()` lê o arquivo de entrada e retorna uma lista de strings (uma por linha).
-2. **Tokenização** — Para cada linha não vazia, `lexer_fsm.parse_expressao()` executa o AFD e produz uma lista de `Token`.
-3. **Parsing e geração** — `AssemblyGenerator.adicionar_expressao()` converte os tokens em uma AST (árvore sintática), emite instruções intermediárias e, ao final, `gerar_programa()` serializa tudo em Assembly ARMv7.
+1. **`lerArquivo`** — `io_utils.ler_arquivo()` lê o arquivo de entrada e retorna uma lista de strings (uma por linha).
+2. **`parseExpressao`** — Para cada linha não vazia, `lexer_fsm.parse_expressao()` executa o AFD e produz uma lista de `Token`.
+3. **`executarExpressao`** — `executor.ExpressionExecutor.executar_expressao()` avalia os tokens em Python usando pilha, gerencia memória e histórico de resultados.
+4. **`exibirResultados`** — `io_utils.exibir_resultados()` exibe os resultados formatados no terminal.
+5. **`gerarAssembly`** — `AssemblyGenerator.adicionar_expressao()` converte os tokens em uma AST, emite instruções intermediárias e `gerar_programa()` serializa tudo em Assembly ARMv7.
 
 ---
 
@@ -468,27 +473,79 @@ Todas as operações binárias seguem o padrão: desempilham dois operandos (`po
 
 ---
 
-## Módulo `io_utils.py` — Entrada e Saída
+## Módulo `executor.py` — Executor de Expressões (`executarExpressao`)
 
-Duas funções utilitárias simples:
+### Classe `ExpressionExecutor`
+
+Avalia expressões RPN em Python com precisão IEEE 754 de 64 bits (`float`), servindo como referência para validar o código Assembly gerado.
+
+#### Estado Interno
+
+| Atributo         | Tipo               | Descrição                                           |
+|------------------|---------------------|-----------------------------------------------------|
+| `_memoria`       | `dict[str, float]` | Dicionário de variáveis de memória (`MEM`)          |
+| `_resultados`    | `list[float]`      | Histórico de resultados para suportar `RES`         |
+
+#### Método `executar_expressao(tokens) → float`
+
+1. Recebe a lista de tokens de `parseExpressao`.
+2. Converte os tokens em AST via `parse_tokens` (reutiliza o parser de `assembly_generator.py`).
+3. Avalia a AST recursivamente com `_avaliar_node`:
+   - **`NumberNode`** → converte o literal para `float`.
+   - **`BinOpNode`** → avalia operandos esquerdo e direito, aplica o operador.
+   - **`MemLoadNode`** → busca no dicionário `_memoria` (erro se não existir).
+   - **`MemStoreNode`** → avalia o valor, armazena em `_memoria`, retorna o valor.
+   - **`ResNode`** → busca no histórico `_resultados` pelo offset (erro se fora de alcance).
+4. Armazena o resultado no histórico e retorna o valor.
+
+#### Método `_aplicar_operador(op, a, b) → float`
+
+Implementa todas as operações com tratamento de divisão por zero:
+
+| Operador | Operação Python          | Precisão         |
+|----------|--------------------------|------------------|
+| `+`      | `a + b`                  | float 64 bits    |
+| `-`      | `a - b`                  | float 64 bits    |
+| `*`      | `a * b`                  | float 64 bits    |
+| `/`      | `a / b`                  | float 64 bits    |
+| `//`     | `int(a) // int(b)`       | Inteiro → float  |
+| `%`      | `int(a) % int(b)`        | Inteiro → float  |
+| `^`      | `a ** int(b)`            | float 64 bits    |
+
+#### Propriedades de Acesso
+
+- `memoria → dict[str, float]` — cópia do estado atual da memória.
+- `resultados → list[float]` — cópia do histórico de resultados.
+
+### Classe `ExecutionError`
+
+Subclasse de `RuntimeError` para erros de execução (divisão por zero, memória não definida, `RES` inválido).
+
+---
+
+## Módulo `io_utils.py` — Entrada, Saída e `exibirResultados`
+
+Funções utilitárias de I/O:
 
 - **`ler_arquivo(nome_arquivo) → list[str]`** — Lê o arquivo em UTF-8 e retorna uma lista de linhas. Levanta `FileNotFoundError` se o arquivo não existir ou `IsADirectoryError` se o caminho não for um arquivo regular.
 - **`escrever_arquivo(nome_arquivo, conteudo)`** — Escreve o conteúdo (string) em um arquivo em UTF-8, sobrescrevendo caso já exista.
+- **`exibir_resultados(resultados, expressoes)`** — Exibe os resultados formatados no terminal: números inteiros sem casas decimais, números reais com uma casa decimal. Mostra cada expressão com seu resultado e o total de expressões avaliadas.
 
 ---
 
 ## Módulo `main.py` — Ponto de Entrada
 
-A função `main(argv)` coordena todo o pipeline:
+A função `main(argv)` coordena todo o pipeline chamando as quatro funções do enunciado em sequência:
 
 1. Valida os argumentos de linha de comando (mínimo 1 arquivo de entrada).
 2. Determina o nome de saída: se não fornecido, substitui a extensão por `.s`.
-3. Lê as linhas do arquivo via `ler_arquivo`.
-4. Itera sobre cada linha não vazia:
-   - Chama `parse_expressao` (análise léxica).
-   - Chama `gerador.adicionar_expressao` (parsing + geração intermediária).
-5. Chama `gerador.gerar_programa()` para serializar o Assembly.
-6. Escreve o resultado via `escrever_arquivo`.
+3. **`lerArquivo`** — Lê as linhas do arquivo via `ler_arquivo`.
+4. Para cada linha não vazia:
+   - **`parseExpressao`** — Chama `parse_expressao` (análise léxica via AFD).
+   - **`executarExpressao`** — Chama `executor.executar_expressao` (avaliação em Python).
+   - **`gerarAssembly`** — Chama `gerador.adicionar_expressao` (parsing + geração intermediária).
+5. **`exibirResultados`** — Chama `exibir_resultados` para mostrar os resultados no terminal.
+6. Chama `gerador.gerar_programa()` para serializar o Assembly e escreve via `escrever_arquivo`.
 
 Retorna `0` em sucesso ou `1` em caso de erro (mensagem impressa no `stdout`).
 
@@ -506,6 +563,16 @@ Retorna `0` em sucesso ou `1` em caso de erro (mensagem impressa no `stdout`).
 | `test_operador_invalido`               | `LexerError` para operador não reconhecido (`&`)                |
 | `test_parenteses_desbalanceados`       | `LexerError` para parênteses não fechados                       |
 
+### `tests/test_executor.py`
+
+| Classe de teste                     | O que valida                                                                  |
+|-------------------------------------|-------------------------------------------------------------------------------|
+| `ExecutorOperacoesBasicasTests`     | Todos os operadores (`+ - * / // % ^`), divisão por zero                      |
+| `ExecutorExpressoesAninhadasTests`  | Parênteses aninhados simples, duplos e triplos                                |
+| `ExecutorMemoriaTests`              | Armazenar/carregar memória, múltiplas variáveis, sobrescrita, memória indefinida |
+| `ExecutorResTests`                  | `RES` com offset 0 e 1, `RES` inválido, histórico de resultados              |
+| `ExecutorPipelineCompletoTests`     | Fluxo completo com 8 expressões diversificadas, precisão 64 bits              |
+
 ### `tests/test_codegen.py`
 
 | Teste                                         | O que valida                                                            |
@@ -522,8 +589,9 @@ O sistema utiliza exceções tipadas para comunicar erros ao longo do pipeline:
 | Exceção              | Módulo               | Situação                                                  |
 |----------------------|----------------------|-----------------------------------------------------------|
 | `LexerError`         | `lexer_fsm`          | Token inválido, número malformado, parênteses desbalanceados |
+| `ExecutionError`     | `executor`           | Divisão por zero, memória não definida, `RES` fora de alcance |
 | `ValueError`         | `assembly_generator`  | AST inválida, `RES` fora de alcance, expressão vazia       |
 | `FileNotFoundError`  | `io_utils`           | Arquivo de entrada não encontrado                          |
 | `IsADirectoryError`  | `io_utils`           | Caminho aponta para diretório em vez de arquivo            |
 
-O `main.py` captura `LexerError` e `ValueError` por linha, imprime a mensagem com o número da linha e encerra com código `1`.
+O `main.py` captura `LexerError`, `ValueError` e `RuntimeError` por linha, imprime a mensagem com o número da linha e encerra com código `1`.
