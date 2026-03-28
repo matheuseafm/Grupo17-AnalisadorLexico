@@ -1,75 +1,156 @@
-# Grupo17 - Analisador Lexico RPN
+# Grupo 17 — Analisador Léxico RPN
 
-Projeto da Fase 1 para ler expressoes em notacao polonesa reversa (RPN), realizar analise lexica por AFD com estados implementados por funcoes e gerar Assembly ARMv7 compativel com o alvo DEC1-SOC (CPULATOR).
+## Informações Acadêmicas
 
-## Requisitos atendidos
+| Campo | Detalhe |
+|---|---|
+| **Instituição** | PUCPR — Pontifícia Universidade Católica do Paraná |
+| **Disciplina** | Construção de Interpretadores |
+| **Professor** | Frank Alcantara |
 
-- Analise lexica sem regex.
-- AFD deterministico com estados em funcoes no arquivo `lexer_fsm.py`.
+### Alunos
+
+| Nome | GitHub |
+|---|---|
+| Matheus Moreira | [@matheuseafm](https://github.com/matheuseafm) |
+
+---
+
+## Descrição do Projeto
+
+Projeto da **Fase 1** da disciplina. O programa lê expressões em **notação polonesa reversa (RPN)** a partir de um arquivo de texto, realiza **análise léxica** por meio de um **Autômato Finito Determinístico (AFD)** — com estados implementados como funções — e gera código **Assembly ARMv7** compatível com o alvo **DEC1-SOC** (simulador CPULATOR).
+
+### Requisitos atendidos
+
+- Análise léxica **sem uso de regex**.
+- AFD determinístico com estados em funções (`lexer_fsm.py`).
 - Reconhecimento de:
-  - parenteses `(` e `)`;
-  - numeros inteiros e reais com ponto decimal;
+  - parênteses `(` e `)`;
+  - números inteiros e reais com ponto decimal;
   - operadores `+ - * / // % ^`;
-  - comandos especiais `RES` e identificadores de memoria em maiusculas.
-- Geracao de Assembly ARMv7 em `assembly_generator.py`.
+  - comandos especiais `RES` e identificadores de memória em letras maiúsculas.
+- Geração de Assembly ARMv7 (`assembly_generator.py`).
 - Leitura de arquivo de entrada por argumento de linha de comando.
-- Tres arquivos de teste (`teste1.txt`, `teste2.txt`, `teste3.txt`) com 10+ linhas cada.
+- Três arquivos de teste (`teste1.txt`, `teste2.txt`, `teste3.txt`) com 10+ linhas cada.
 
-## Estrutura
+---
 
-- `main.py`: entrada do programa.
-- `io_utils.py`: leitura/escrita de arquivo.
-- `tokens.py`: tipos de token.
-- `lexer_fsm.py`: analisador lexico por automato finito.
-- `assembly_generator.py`: parser estrutural minimo + gerador Assembly.
-- `tests/test_lexer.py`: testes do lexer.
-- `tests/test_codegen.py`: testes do gerador.
+## Pré-requisitos
 
-## Formato da linguagem (entrada)
+- **Python 3.10** ou superior.
+- Nenhuma dependência externa é necessária; o projeto utiliza apenas a biblioteca padrão do Python.
 
-Cada linha contem uma expressao:
+---
 
-- Operacoes binarias: `(A B op)` com `op` em `+ - * / // % ^`
-- Uso de resultado anterior: `(N RES)` onde `N` e inteiro nao negativo
-- Armazenamento em memoria: `(V MEM)` onde `MEM` tem apenas letras maiusculas
-- Leitura de memoria: `(MEM)`
-- Aninhamento: permitido com parenteses, por exemplo `((1 2 +) (3 4 *) /)`
+## Estrutura do Projeto
 
-## Execucao
+```
+Grupo17-AnalisadorLexico/
+├── main.py                  # Ponto de entrada do programa
+├── io_utils.py              # Leitura e escrita de arquivos
+├── tokens.py                # Definição dos tipos de token
+├── lexer_fsm.py             # Analisador léxico (AFD com funções de estado)
+├── assembly_generator.py    # Parser estrutural mínimo + gerador Assembly ARMv7
+├── tests/
+│   ├── test_lexer.py        # Testes unitários do lexer
+│   └── test_codegen.py      # Testes unitários do gerador de código
+├── teste1.txt               # Arquivo de teste 1 (entrada)
+├── teste2.txt               # Arquivo de teste 2 (entrada)
+├── teste3.txt               # Arquivo de teste 3 (entrada)
+└── README.md
+```
 
-Gerar Assembly a partir de um arquivo:
+---
+
+## Formato da Linguagem de Entrada
+
+Cada linha do arquivo de entrada contém uma expressão RPN:
+
+| Construção | Sintaxe | Exemplo |
+|---|---|---|
+| Operação binária | `(A B op)` | `(1 2 +)` |
+| Resultado anterior | `(N RES)` | `(0 RES)` |
+| Armazenamento em memória | `(V MEM)` | `(42 TOTAL)` |
+| Leitura de memória | `(MEM)` | `(TOTAL)` |
+| Aninhamento | parênteses internos | `((1 2 +) (3 4 *) /)` |
+
+Operadores suportados: `+`, `-`, `*`, `/`, `//`, `%`, `^`
+
+---
+
+## Como Compilar e Executar
+
+> O projeto é inteiramente em Python e **não requer compilação**. Basta executar diretamente com o interpretador Python.
+
+### Execução básica
+
+Gere o Assembly a partir de um arquivo de entrada. O arquivo `.s` de saída terá o mesmo nome-base da entrada:
 
 ```bash
 python main.py teste1.txt
 ```
 
-Com nome de saida explicito:
+Isso gera o arquivo `teste1.s`.
+
+### Especificando o arquivo de saída
 
 ```bash
 python main.py teste1.txt saida.s
 ```
 
-## Testes automatizados
+### Uso geral
+
+```
+python main.py <arquivo_entrada.txt> [arquivo_saida.s]
+```
+
+| Argumento | Obrigatório | Descrição |
+|---|---|---|
+| `<arquivo_entrada.txt>` | Sim | Caminho do arquivo com as expressões RPN |
+| `[arquivo_saida.s]` | Não | Caminho do arquivo Assembly de saída (padrão: `<nome_entrada>.s`) |
+
+---
+
+## Como Rodar os Testes
+
+Os testes unitários utilizam o módulo `unittest` da biblioteca padrão. Para executar todos os testes:
 
 ```bash
 python -m unittest discover -s tests -p "test_*.py"
 ```
 
-## Checklist para validacao no CPULATOR
+Para executar um arquivo de teste específico:
 
-- Gerar arquivo `.s` com `python main.py teste1.txt`.
-- Abrir CPULATOR no modelo `ARMv7 DEC1-SOC (v16.1)`.
-- Carregar o `.s` gerado.
-- Montar/executar e verificar que as instrucoes de cada linha foram emitidas:
-  - operadores reais (`+ - * /`);
-  - operadores inteiros (`// %`);
-  - potencia (`^` com expoente inteiro);
-  - comandos especiais (`RES`, armazenamento e leitura de memoria).
+```bash
+python -m unittest tests.test_lexer
+python -m unittest tests.test_codegen
+```
 
-## Observacao importante
+---
 
-O programa em Python nao executa os calculos da linguagem-alvo. Ele apenas:
+## Validação no CPULATOR
 
-1. Le o codigo fonte da linguagem;
-2. Faz analise lexica;
-3. Gera Assembly para a arquitetura alvo.
+Passo a passo para validar o Assembly gerado no simulador CPULATOR:
+
+1. Gere o arquivo `.s`:
+   ```bash
+   python main.py teste1.txt
+   ```
+2. Abra o **CPULATOR** e selecione o modelo **ARMv7 DEC1-SOC (v16.1)**.
+3. Carregue o arquivo `.s` gerado.
+4. Monte e execute o programa.
+5. Verifique que as instruções de cada linha foram emitidas corretamente:
+   - Operadores reais: `+`, `-`, `*`, `/`
+   - Operadores inteiros: `//`, `%`
+   - Potência: `^` (com expoente inteiro)
+   - Comandos especiais: `RES`, armazenamento e leitura de memória
+
+---
+
+## Observação Importante
+
+O programa em Python **não executa** os cálculos da linguagem-alvo. Ele apenas:
+
+1. Lê o código-fonte da linguagem de entrada;
+2. Realiza a análise léxica (tokenização via AFD);
+3. Gera o código Assembly para a arquitetura-alvo (ARMv7).
