@@ -59,6 +59,12 @@ Grupo17-AnalisadorLexico/
 ├── teste1.txt               # Arquivo de teste 1 (entrada)
 ├── teste2.txt               # Arquivo de teste 2 (entrada)
 ├── teste3.txt               # Arquivo de teste 3 (entrada)
+├── teste1.s                 # Assembly gerado a partir de teste1.txt
+├── teste2.s                 # Assembly gerado a partir de teste2.txt
+├── teste3.s                 # Assembly gerado a partir de teste3.txt
+├── teste1_tokens.txt        # Tokens gerados a partir de teste1.txt
+├── teste2_tokens.txt        # Tokens gerados a partir de teste2.txt
+├── teste3_tokens.txt        # Tokens gerados a partir de teste3.txt
 └── README.md
 ```
 
@@ -86,15 +92,19 @@ Operadores suportados: `+`, `-`, `*`, `/`, `//`, `%`, `^`
 
 ### Execução básica
 
-Gere o Assembly a partir de um arquivo de entrada. O arquivo `.s` de saída terá o mesmo nome-base da entrada:
+Gere o Assembly a partir de um arquivo de entrada. Os arquivos de saída terão o mesmo nome-base da entrada:
 
 ```bash
 python main.py teste1.txt
 ```
 
-Isso gera o arquivo `teste1.s`.
+Isso gera:
+- `teste1.s` — código Assembly ARMv7
+- `teste1_tokens.txt` — tokens gerados pelo analisador léxico
 
-### Especificando o arquivo de saída
+Além disso, os resultados da execução das expressões são exibidos no terminal.
+
+### Especificando o arquivo de saída Assembly
 
 ```bash
 python main.py teste1.txt saida.s
@@ -111,6 +121,14 @@ python main.py <arquivo_entrada.txt> [arquivo_saida.s]
 | `<arquivo_entrada.txt>` | Sim | Caminho do arquivo com as expressões RPN |
 | `[arquivo_saida.s]` | Não | Caminho do arquivo Assembly de saída (padrão: `<nome_entrada>.s`) |
 
+### Saídas geradas
+
+| Arquivo | Descrição |
+|---|---|
+| `<nome>.s` | Código Assembly ARMv7 para DEC1-SOC |
+| `<nome>_tokens.txt` | Tokens gerados pelo analisador léxico (tipo e lexema de cada token por linha) |
+| Terminal (`stdout`) | Resultados da execução de cada expressão |
+
 ---
 
 ## Como Rodar os Testes
@@ -125,6 +143,7 @@ Para executar um arquivo de teste específico:
 
 ```bash
 python -m unittest tests.test_lexer
+python -m unittest tests.test_executor
 python -m unittest tests.test_codegen
 ```
 
@@ -151,11 +170,14 @@ Passo a passo para validar o Assembly gerado no simulador CPULATOR:
 
 ## Observação Importante
 
-O programa em Python **não executa** os cálculos da linguagem-alvo. Ele apenas:
+O programa em Python **não é um compilador completo**. Ele:
 
 1. Lê o código-fonte da linguagem de entrada;
 2. Realiza a análise léxica (tokenização via AFD);
-3. Gera o código Assembly para a arquitetura-alvo (ARMv7).
+3. Executa as expressões em Python para validação e exibição dos resultados;
+4. Gera o código Assembly para a arquitetura-alvo (ARMv7).
+
+O cálculo final deve ser obtido pela execução do Assembly gerado no **CPULATOR ARMv7 DEC1-SOC (v16.1)**.
 
 ---
 
@@ -169,15 +191,17 @@ O sistema é organizado em um pipeline de quatro estágios sequenciais, coordena
  Arquivo .txt ──▶ Leitura (io_utils) ──▶ Análise Léxica (lexer_fsm)
                                               │
                                          Lista de Tokens
-                                         ┌────┴────┐
-                                         │         │
-                                         ▼         ▼
-                              Execução Python   Geração Assembly
-                               (executor)     (assembly_generator)
-                                  │               │
-                                  ▼               ▼
-                           exibirResultados   Arquivo .s (saída)
-                            (io_utils)
+                                     ┌────────┼────────┐
+                                     │        │        │
+                                     ▼        ▼        ▼
+                              Execução    Geração    Salvar Tokens
+                               Python    Assembly    (io_utils)
+                             (executor) (assembly_      │
+                                  │     generator)      ▼
+                                  ▼        │     _tokens.txt
+                           exibirResultados│
+                            (io_utils)     ▼
+                                       Arquivo .s
 ```
 
 O fluxo completo, orquestrado por `main.py`, segue as quatro funções solicitadas no enunciado:
@@ -187,6 +211,7 @@ O fluxo completo, orquestrado por `main.py`, segue as quatro funções solicitad
 3. **`executarExpressao`** — `executor.ExpressionExecutor.executar_expressao()` avalia os tokens em Python usando pilha, gerencia memória e histórico de resultados.
 4. **`exibirResultados`** — `io_utils.exibir_resultados()` exibe os resultados formatados no terminal.
 5. **`gerarAssembly`** — `AssemblyGenerator.adicionar_expressao()` converte os tokens em uma AST, emite instruções intermediárias e `gerar_programa()` serializa tudo em Assembly ARMv7.
+6. **`salvarTokens`** — `io_utils.salvar_tokens()` grava os tokens gerados pelo analisador léxico em um arquivo de texto (`<nome>_tokens.txt`).
 
 ---
 
@@ -523,12 +548,13 @@ Subclasse de `RuntimeError` para erros de execução (divisão por zero, memóri
 
 ---
 
-## Módulo `io_utils.py` — Entrada, Saída e `exibirResultados`
+## Módulo `io_utils.py` — Entrada, Saída, `exibirResultados` e `salvarTokens`
 
 Funções utilitárias de I/O:
 
 - **`ler_arquivo(nome_arquivo) → list[str]`** — Lê o arquivo em UTF-8 e retorna uma lista de linhas. Levanta `FileNotFoundError` se o arquivo não existir ou `IsADirectoryError` se o caminho não for um arquivo regular.
 - **`escrever_arquivo(nome_arquivo, conteudo)`** — Escreve o conteúdo (string) em um arquivo em UTF-8, sobrescrevendo caso já exista.
+- **`salvar_tokens(nome_arquivo, tokens_por_linha)`** — Salva os tokens gerados pelo analisador léxico em um arquivo de texto. Para cada linha de entrada, lista o tipo (`TokenType`) e o lexema de cada token, além de um resumo com o total de linhas analisadas e tokens gerados.
 - **`exibir_resultados(resultados, expressoes)`** — Exibe os resultados formatados no terminal: números inteiros sem casas decimais, números reais com uma casa decimal. Mostra cada expressão com seu resultado e o total de expressões avaliadas.
 
 ---
@@ -538,14 +564,15 @@ Funções utilitárias de I/O:
 A função `main(argv)` coordena todo o pipeline chamando as quatro funções do enunciado em sequência:
 
 1. Valida os argumentos de linha de comando (mínimo 1 arquivo de entrada).
-2. Determina o nome de saída: se não fornecido, substitui a extensão por `.s`.
+2. Determina os nomes de saída: `<nome>.s` (Assembly) e `<nome>_tokens.txt` (tokens).
 3. **`lerArquivo`** — Lê as linhas do arquivo via `ler_arquivo`.
 4. Para cada linha não vazia:
-   - **`parseExpressao`** — Chama `parse_expressao` (análise léxica via AFD).
+   - **`parseExpressao`** — Chama `parse_expressao` (análise léxica via AFD) e coleta os tokens.
    - **`executarExpressao`** — Chama `executor.executar_expressao` (avaliação em Python).
    - **`gerarAssembly`** — Chama `gerador.adicionar_expressao` (parsing + geração intermediária).
 5. **`exibirResultados`** — Chama `exibir_resultados` para mostrar os resultados no terminal.
-6. Chama `gerador.gerar_programa()` para serializar o Assembly e escreve via `escrever_arquivo`.
+6. **`salvarTokens`** — Chama `salvar_tokens` para gravar os tokens em `<nome>_tokens.txt`.
+7. Chama `gerador.gerar_programa()` para serializar o Assembly e escreve via `escrever_arquivo`.
 
 Retorna `0` em sucesso ou `1` em caso de erro (mensagem impressa no `stdout`).
 
