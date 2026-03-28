@@ -1,0 +1,112 @@
+============================================================
+TOKENS GERADOS PELO ANALISADOR LEXICO
+============================================================
+
+Linha 1: (100 25 /)
+----------------------------------------
+  LPAREN       | '('
+  INT          | '100'
+  INT          | '25'
+  OPERATOR     | '/'
+  RPAREN       | ')'
+
+Linha 2: (100 25 //)
+----------------------------------------
+  LPAREN       | '('
+  INT          | '100'
+  INT          | '25'
+  OPERATOR     | '//'
+  RPAREN       | ')'
+
+Linha 3: (100 25 %)
+----------------------------------------
+  LPAREN       | '('
+  INT          | '100'
+  INT          | '25'
+  OPERATOR     | '%'
+  RPAREN       | ')'
+
+Linha 4: (6 7 *)
+----------------------------------------
+  LPAREN       | '('
+  INT          | '6'
+  INT          | '7'
+  OPERATOR     | '*'
+  RPAREN       | ')'
+
+Linha 5: (9 4 -)
+----------------------------------------
+  LPAREN       | '('
+  INT          | '9'
+  INT          | '4'
+  OPERATOR     | '-'
+  RPAREN       | ')'
+
+Linha 6: (1.125 2.875 +)
+----------------------------------------
+  LPAREN       | '('
+  REAL         | '1.125'
+  REAL         | '2.875'
+  OPERATOR     | '+'
+  RPAREN       | ')'
+
+Linha 7: (2 BASE)
+----------------------------------------
+  LPAREN       | '('
+  INT          | '2'
+  IDENTIFIER   | 'BASE'
+  RPAREN       | ')'
+
+Linha 8: ((BASE) 3 ^)
+----------------------------------------
+  LPAREN       | '('
+  LPAREN       | '('
+  IDENTIFIER   | 'BASE'
+  RPAREN       | ')'
+  INT          | '3'
+  OPERATOR     | '^'
+  RPAREN       | ')'
+
+Linha 9: (((BASE) 2 *) (1 1 +) /)
+----------------------------------------
+  LPAREN       | '('
+  LPAREN       | '('
+  LPAREN       | '('
+  IDENTIFIER   | 'BASE'
+  RPAREN       | ')'
+  INT          | '2'
+  OPERATOR     | '*'
+  RPAREN       | ')'
+  LPAREN       | '('
+  INT          | '1'
+  INT          | '1'
+  OPERATOR     | '+'
+  RPAREN       | ')'
+  OPERATOR     | '/'
+  RPAREN       | ')'
+
+Linha 10: (2 RES)
+----------------------------------------
+  LPAREN       | '('
+  INT          | '2'
+  RES          | 'RES'
+  RPAREN       | ')'
+
+Linha 11: ((0 RES) (1 RES) +)
+----------------------------------------
+  LPAREN       | '('
+  LPAREN       | '('
+  INT          | '0'
+  RES          | 'RES'
+  RPAREN       | ')'
+  LPAREN       | '('
+  INT          | '1'
+  RES          | 'RES'
+  RPAREN       | ')'
+  OPERATOR     | '+'
+  RPAREN       | ')'
+
+============================================================
+Total de linhas analisadas: 11
+Total de tokens gerados:    71
+============================================================
