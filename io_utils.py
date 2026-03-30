@@ -1,22 +1,26 @@
 # Matheus Moreira - matheuseafm - Grupo 17
+# Entrada/saída: ler arquivo, gravar Assembly, salvar tokens e exibir resultados.
+
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path  # API moderna para caminhos e leitura/escrita de texto
 
 
 def ler_arquivo(nome_arquivo: str) -> list[str]:
+    # Converte string em objeto Path (multiplataforma)
     caminho = Path(nome_arquivo)
     if not caminho.exists():
         raise FileNotFoundError(f"Arquivo nao encontrado: {nome_arquivo}")
     if not caminho.is_file():
         raise IsADirectoryError(f"Caminho nao e arquivo: {nome_arquivo}")
 
+    # UTF-8: acentos e texto legível; splitlines() remove \n final sem linha fantasma vazia extra
     return caminho.read_text(encoding="utf-8").splitlines()
 
 
 def escrever_arquivo(nome_arquivo: str, conteudo: str) -> None:
     caminho = Path(nome_arquivo)
-    caminho.write_text(conteudo, encoding="utf-8")
+    caminho.write_text(conteudo, encoding="utf-8")  # Sobrescreve se existir
 
 
 def salvar_tokens(
@@ -32,6 +36,7 @@ def salvar_tokens(
         linhas.append(f"\nLinha {numero}: {expressao.strip()}")
         linhas.append("-" * 40)
         for token in tokens:
+            # token_type.value: nome do enum; !r: repr do lexema (aspas visíveis)
             linhas.append(f"  {token.token_type.value:<12} | {token.lexeme!r}")
     linhas.append("\n" + "=" * 60)
     linhas.append(f"Total de linhas analisadas: {len(tokens_por_linha)}")
@@ -49,7 +54,9 @@ def exibir_resultados(resultados: list[float], expressoes: list[str]) -> None:
     print("=" * 50)
     print("RESULTADOS DA EXECUCAO")
     print("=" * 50)
+    # zip emparelha resultado i com expressão i (mesma ordem do main)
     for i, (resultado, expr) in enumerate(zip(resultados, expressoes), start=1):
+        # Inteiro "puro" em float: mostra sem .0; senão uma casa decimal
         if resultado == int(resultado):
             valor_fmt = f"{int(resultado)}"
         else:
@@ -62,4 +69,3 @@ def exibir_resultados(resultados: list[float], expressoes: list[str]) -> None:
 
 
 exibirResultados = exibir_resultados
-

@@ -1,4 +1,6 @@
 # Matheus Moreira - matheuseafm - Grupo 17
+# Parser (tokens → AST), emissão de IR (tuplas) e serialização para Assembly ARMv7.
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -6,41 +8,46 @@ from dataclasses import dataclass
 from tokens import Token, TokenType
 
 
+# --- Nós da AST (árvore sintática abstrata) ---------------------------------
+
 @dataclass(frozen=True)
 class NumberNode:
-    literal: str
-    is_int: bool
+    literal: str  # Texto do número na entrada ("3" ou "3.14")
+    is_int: bool  # True se veio de token INT (exigido para validar (N RES))
 
 
 @dataclass(frozen=True)
 class MemLoadNode:
-    name: str
+    name: str  # Forma (MEM): só leitura da variável
 
 
 @dataclass(frozen=True)
 class MemStoreNode:
-    name: str
-    value: object
+    name: str  # Nome da variável de memória
+    value: object  # Subárvore: número, binária, aninhada, etc.
 
 
 @dataclass(frozen=True)
 class ResNode:
-    offset: int
+    offset: int  # (N RES): quantos resultados anteriores voltar (0 = último)
 
 
 @dataclass(frozen=True)
 class BinOpNode:
-    op: str
-    left: object
-    right: object
+    op: str  # Lexema do operador
+    left: object  # Operando esquerdo na RPN embutida em parênteses
+    right: object  # Operando direito
 
+
+# --- Cursor sobre a lista de tokens (parser recursivo descendente) ----------
 
 class _TokenCursor:
     def __init__(self, tokens: list[Token]) -> None:
         self.tokens = tokens
-        self.index = 0
+        self.index = 0  # Próximo token a consumir
 
     def peek(self, ahead: int = 0) -> Token | None:
+        # Olha o token em index+ahead sem avançar (lookahead)
         idx = self.index + ahead
         if idx >= len(self.tokens):
             return None
@@ -57,11 +64,12 @@ class _TokenCursor:
 
 
 def _parse_item(cursor: _TokenCursor):
+    # Operando: número, ou subexpressão entre parênteses
     token = cursor.peek()
     if token is None:
         raise ValueError("Item esperado, mas fim de tokens encontrado.")
     if token.token_type == TokenType.LPAREN:
-        return _parse_expr(cursor)
+        return _parse_expr(cursor)  # Recursão para aninhamento
     if token.token_type == TokenType.REAL:
         cursor.consume(TokenType.REAL)
         return NumberNode(token.lexeme, is_int=False)
@@ -72,8 +80,10 @@ def _parse_item(cursor: _TokenCursor):
 
 
 def _parse_expr(cursor: _TokenCursor):
+    # Uma expressão: '(' ... ')' com várias formas internas
     cursor.consume(TokenType.LPAREN)
 
+    # Lookahead 2: ( IDENT ) → leitura de memória apenas
     maybe_ident = cursor.peek()
     maybe_rparen = cursor.peek(1)
     if (
@@ -92,6 +102,7 @@ def _parse_expr(cursor: _TokenCursor):
         raise ValueError("Expressao incompleta.")
 
     if next_token.token_type == TokenType.RES:
+        # ( N RES ): N deve ser inteiro não negativo
         if not isinstance(first, NumberNode) or not first.is_int:
             raise ValueError("Comando RES exige inteiro nao negativo no formato (N RES).")
         offset = int(first.literal)
@@ -102,10 +113,12 @@ def _parse_expr(cursor: _TokenCursor):
         return ResNode(offset=offset)
 
     if next_token.token_type == TokenType.IDENTIFIER:
+        # ( valor MEM ): armazena valor em MEM
         mem_name = cursor.consume(TokenType.IDENTIFIER).lexeme
         cursor.consume(TokenType.RPAREN)
         return MemStoreNode(name=mem_name, value=first)
 
+    # Caso binário: ( esq dir op )
     second = _parse_item(cursor)
     op = cursor.consume(TokenType.OPERATOR).lexeme
     cursor.consume(TokenType.RPAREN)
@@ -113,6 +126,7 @@ def _parse_expr(cursor: _TokenCursor):
 
 
 def _parse_tokens(tokens: list[Token]):
+    # Uma linha = exatamente uma expressão; não pode sobrar token
     cursor = _TokenCursor(tokens)
     node = _parse_expr(cursor)
     if cursor.peek() is not None:
@@ -120,19 +134,24 @@ def _parse_tokens(tokens: list[Token]):
     return node
 
 
+# --- Gerador: AST → IR (tuplas) → strings Assembly --------------------------
+
 class AssemblyGenerator:
     def __init__(self) -> None:
+        # Lista por linha de expressão: cada elemento é lista de instruções IR
         self._expr_instrs: list[list[tuple[str, str | int | None]]] = []
-        self._constants: dict[str, str] = {}
-        self._memories: set[str] = set()
+        self._constants: dict[str, str] = {}  # literal numérico → rótulo const_N
+        self._memories: set[str] = set()  # Variáveis que precisam de .data mem_X
 
     def _const_label(self, literal: str) -> str:
+        # Deduplica constantes iguais no mesmo programa
         if literal not in self._constants:
             label = f"const_{len(self._constants)}"
             self._constants[literal] = label
         return self._constants[literal]
 
     def _emit_node(self, node, line_index: int) -> list[tuple[str, str | int | None]]:
+        # line_index: índice desta expressão no programa (0, 1, ...) para LOAD_RES
         if isinstance(node, NumberNode):
             return [("PUSH_CONST", self._const_label(node.literal))]
 
@@ -141,6 +160,7 @@ class AssemblyGenerator:
             return [("LOAD_MEM", node.name)]
 
         if isinstance(node, ResNode):
+            # Resultado da linha target no .data: result_0, result_1, ...
             target = line_index - 1 - node.offset
             if target < 0:
                 raise ValueError(
@@ -155,6 +175,7 @@ class AssemblyGenerator:
             return instrs
 
         if isinstance(node, BinOpNode):
+            # Pós-ordem na IR: avalia esquerda, direita, depois operação
             instrs = []
             instrs.extend(self._emit_node(node.left, line_index))
             instrs.extend(self._emit_node(node.right, line_index))
@@ -167,13 +188,14 @@ class AssemblyGenerator:
         if not tokens:
             return
         node = _parse_tokens(tokens)
-        line_index = len(self._expr_instrs)
+        line_index = len(self._expr_instrs)  # Índice 0-based da expressão atual
         instrs = self._emit_node(node, line_index)
         if not instrs:
             raise ValueError(f"Linha {numero_linha}: expressao vazia apos analise.")
         self._expr_instrs.append(instrs)
 
     def _asm_for_instruction(self, instr: tuple[str, str | int | None]) -> list[str]:
+        # Traduz uma tupla IR em linhas Assembly (indentadas com 4 espaços)
         kind, value = instr
         if kind == "PUSH_CONST":
             return [
@@ -221,6 +243,7 @@ class AssemblyGenerator:
 
     @staticmethod
     def _binary_op(operation_lines: list[str]) -> list[str]:
+        # Convenção pilha: topo = d0, abaixo = d1; após op, resultado em d0
         lines = [
             "    bl pop_to_d0",
             "    bl pop_to_d1",
@@ -230,7 +253,9 @@ class AssemblyGenerator:
         return lines
 
     def gerar_programa(self) -> str:
+        # Monta o arquivo .s: cabeçalho, uma seção por expressão, rotinas, .data
         text: list[str] = []
+        # Diretivas GNU as: sintaxe unificada Thumb/ARM, CPU e FPU do alvo CPULATOR
         text.extend(
             [
                 ".syntax unified",
@@ -240,8 +265,8 @@ class AssemblyGenerator:
                 "",
                 ".text",
                 "_start:",
-                "    ldr r10, =eval_stack",
-                "    mov r11, #0",
+                "    ldr r10, =eval_stack",  # Base da pilha de avaliação
+                "    mov r11, #0",  # Topo da pilha: offset em bytes desde a base
                 "",
             ]
         )
@@ -250,6 +275,7 @@ class AssemblyGenerator:
             text.append(f"line_{idx}:")
             for instr in instrs:
                 text.extend(self._asm_for_instruction(instr))
+            # Ao fim da linha: desempilha o valor final para result_idx e zera pilha
             text.extend(
                 [
                     "    bl pop_to_d0",
@@ -260,6 +286,7 @@ class AssemblyGenerator:
                 ]
             )
 
+        # Fim do programa (loop infinito), rotinas de pilha e operações inteiras/potência
         text.extend(
             [
                 "end_program:",
@@ -384,12 +411,15 @@ class AssemblyGenerator:
             ]
         )
 
+        # Constantes numéricas usadas nas expressões
         for literal, label in self._constants.items():
             text.append(f"{label}: .double {literal}")
 
+        # Variáveis de memória referenciadas no programa
         for mem_name in sorted(self._memories):
             text.append(f"mem_{mem_name}: .double 0.0")
 
+        # Um double por linha de expressão (resultado após execução da linha)
         for idx in range(len(self._expr_instrs)):
             text.append(f"result_{idx}: .double 0.0")
 
@@ -399,6 +429,5 @@ class AssemblyGenerator:
 
 parse_tokens = _parse_tokens
 
-# Alias pedido no enunciado
+# Alias pedido no enunciado (nome da classe do gerador)
 gerarAssembly = AssemblyGenerator
-
