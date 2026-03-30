@@ -1,28 +1,43 @@
 # Matheus Moreira - matheuseafm - Grupo 17
-# Definições centrais: tipos de token, conjunto de operadores e estrutura Token.
+# =============================================================================
+# tokens.py — Vocabulário do analisador léxico
+# Define os 7 tipos de token que o AFD pode reconhecer, o conjunto de
+# operadores válidos e a estrutura de dados Token (tipo + texto original).
+# Todos os outros módulos importam daqui.
+# =============================================================================
 
 from __future__ import annotations
 
-from dataclasses import dataclass  # Gera __init__, __repr__, etc. para classes de dados
-from enum import Enum  # Enumeração dos tipos léxicos (constantes nomeadas)
+# dataclass: decorator que gera automaticamente __init__, __repr__, __eq__
+# para classes que só guardam dados (evita escrever boilerplate)
+from dataclasses import dataclass
+
+# Enum: cria constantes nomeadas agrupadas; herdar de str faz .value retornar string
+from enum import Enum
 
 
+# TokenType é um enum com 7 membros, um para cada categoria léxica possível.
+# Herdar de str permite comparar tokens com strings diretamente (ex.: token == "LPAREN")
 class TokenType(str, Enum):
-    # Herda de str para que .value seja string e compare bem com impressão
-    LPAREN = "LPAREN"  # '('
-    RPAREN = "RPAREN"  # ')'
-    REAL = "REAL"  # Número com ponto decimal (ex.: 3.14)
-    INT = "INT"  # Inteiro sem ponto (ex.: 42)
-    OPERATOR = "OPERATOR"  # + - * / // % ^
-    IDENTIFIER = "IDENTIFIER"  # Nome de memória em maiúsculas (ex.: TOTAL)
-    RES = "RES"  # Palavra reservada para resultado anterior
+    LPAREN = "LPAREN"      # Parêntese de abertura: o caractere '('
+    RPAREN = "RPAREN"      # Parêntese de fechamento: o caractere ')'
+    REAL = "REAL"          # Número com ponto decimal — ex.: 3.14, 0.5, 2.0
+    INT = "INT"            # Número inteiro (sem ponto) — ex.: 3, 42, 0
+    OPERATOR = "OPERATOR"  # Operador aritmético: + - * / // % ^
+    IDENTIFIER = "IDENTIFIER"  # Nome de variável de memória em MAIUSCULAS — ex.: TOTAL, X
+    RES = "RES"            # Palavra reservada especial: acessa resultado anterior
 
 
-# Conjunto usado após o lexer para validar que OPERATOR só contém lexemas permitidos
+# Conjunto (set) dos lexemas de operadores aceitos pelo programa.
+# Usado em _validar_tokens para confirmar que nenhum operador inválido passou.
+# Set escolhido para busca O(1): "in OPERATORS" é mais rápido que lista.
 OPERATORS = {"+", "-", "*", "/", "//", "%", "^"}
 
 
-@dataclass(frozen=True)  # frozen=True: token imutável (hashable, seguro de compartilhar)
+# frozen=True torna o Token imutável: após criado, não pode ser alterado.
+# Vantagens: segurança (ninguém corrompe o token), hashable (pode ir em sets/dicts),
+# e deixa claro que token é um valor, não um objeto com estado.
+@dataclass(frozen=True)
 class Token:
-    token_type: TokenType  # Qual categoria léxica
-    lexeme: str  # Texto exato na entrada (ex.: "3.14", "//")
+    token_type: TokenType  # A categoria do token (INT, REAL, OPERATOR, etc.)
+    lexeme: str            # O texto exato que apareceu na entrada (ex.: "3.14", "//", "+")
